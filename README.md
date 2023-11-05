@@ -3,9 +3,11 @@ Convert between go structures to environment variable and back (for structured c
 
 There are many go packages that are doing environment to go struct config (for instance https://github.com/kelseyhightower/envconfig) but I didn't find one doing the inverse and we needed to set a bunch of environment variables for shell and other tools to get some configuration structured as JSON and Go object, so this was born. For symetry the reverse was also added (history of commit on https://github.com/fortio/dflag/pull/50/commits)
 
-Standalone package with 0 dependencies outside of the go standard library.
+Standalone package with 0 dependencies outside of the go standard library. Developed with go 1.20 but tested with go as old as 1.17
+but should works with pretty much any go version, as it only depends on reflection and strconv.
 
-The unit test has a fairly extensive example on how
+
+The unit test has a fairly extensive example on how:
 ```go
 type FooConfig struct {
 	Foo          string

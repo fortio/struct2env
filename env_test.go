@@ -1,12 +1,10 @@
-package struct2env_test
+package struct2env
 
 import (
 	"os"
 	"reflect"
 	"strings"
 	"testing"
-
-	"fortio.org/struct2env"
 )
 
 func TestSplitByCase(t *testing.T) {
@@ -35,7 +33,7 @@ func TestSplitByCase(t *testing.T) {
 		{"AABbbCcc", []string{"AA", "Bbb", "Ccc"}},
 	}
 	for _, test := range tests {
-		got := struct2env.SplitByCase(test.in)
+		got := SplitByCase(test.in)
 		if !reflect.DeepEqual(got, test.out) {
 			t.Errorf("mismatch for %q: got %v expected %v", test.in, got, test.out)
 		}
@@ -62,11 +60,11 @@ func TestCamelCaseToSnakeCase(t *testing.T) {
 		{"HTTPSServer42", "HTTPS_SERVER42"},
 	}
 	for _, test := range tests {
-		if got := struct2env.CamelCaseToUpperSnakeCase(test.in); got != test.out {
+		if got := CamelCaseToUpperSnakeCase(test.in); got != test.out {
 			t.Errorf("for %q expected upper %q and got %q", test.in, test.out, got)
 		}
 		lower := strings.ToLower(test.out)
-		if got := struct2env.CamelCaseToLowerSnakeCase(test.in); got != lower {
+		if got := CamelCaseToLowerSnakeCase(test.in); got != lower {
 			t.Errorf("for %q expected lower %q and got %q", test.in, lower, got)
 		}
 	}
@@ -91,7 +89,7 @@ func TestCamelCaseToLowerKebabCase(t *testing.T) {
 		{"HTTPSServer42", "https-server42"},
 	}
 	for _, test := range tests {
-		if got := struct2env.CamelCaseToLowerKebabCase(test.in); got != test.out {
+		if got := CamelCaseToLowerKebabCase(test.in); got != test.out {
 			t.Errorf("for %q expected %q and got %q", test.in, test.out, got)
 		}
 	}
@@ -140,21 +138,21 @@ func TestStructToEnvVars(t *testing.T) {
 	}
 	foo.InnerA = "inner a"
 	foo.InnerB = "inner b"
-	empty, errors := struct2env.StructToEnvVars(42) // error/empty
+	empty, errors := StructToEnvVars(42) // error/empty
 	if len(empty) != 0 {
 		t.Errorf("expected empty, got %v", empty)
 	}
 	if len(errors) != 1 {
 		t.Errorf("expected errors, got %v", errors)
 	}
-	envVars, errors := struct2env.StructToEnvVars(&foo)
+	envVars, errors := StructToEnvVars(&foo)
 	if len(errors) != 0 {
 		t.Errorf("expected no error, got %v", errors)
 	}
 	if len(envVars) != 11 {
 		t.Errorf("expected 11 env vars, got %d: %+v", len(envVars), envVars)
 	}
-	str := struct2env.ToShellWithPrefix("TST_", envVars)
+	str := ToShellWithPrefix("TST_", envVars)
 	//nolint:lll
 	expected := `TST_FOO="a\nfoo with \" quotes and \\ and '"
 TST_BAR="42str"
@@ -191,7 +189,7 @@ func TestSetFromEnv(t *testing.T) {
 	for _, e := range envs {
 		os.Setenv(e.k, e.v)
 	}
-	errors := struct2env.SetFromEnv("TST2_", &foo)
+	errors := SetFromEnv("TST2_", &foo)
 	if len(errors) != 0 {
 		t.Errorf("Unexpectedly got errors :%v", errors)
 	}
