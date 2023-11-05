@@ -7,7 +7,7 @@ import (
 
 	"fortio.org/assert"
 	"fortio.org/log"
-	env "fortio.org/struct2env"
+	"fortio.org/struct2env"
 )
 
 func TestSplitByCase(t *testing.T) {
@@ -36,7 +36,7 @@ func TestSplitByCase(t *testing.T) {
 		{"AABbbCcc", []string{"AA", "Bbb", "Ccc"}},
 	}
 	for _, test := range tests {
-		got := env.SplitByCase(test.in)
+		got := struct2env.SplitByCase(test.in)
 		assert.Equal(t, got, test.out, "mismatch for", test.in)
 	}
 }
@@ -61,11 +61,11 @@ func TestCamelCaseToSnakeCase(t *testing.T) {
 		{"HTTPSServer42", "HTTPS_SERVER42"},
 	}
 	for _, test := range tests {
-		if got := env.CamelCaseToUpperSnakeCase(test.in); got != test.out {
+		if got := struct2env.CamelCaseToUpperSnakeCase(test.in); got != test.out {
 			t.Errorf("for %q expected upper %q and got %q", test.in, test.out, got)
 		}
 		lower := strings.ToLower(test.out)
-		if got := env.CamelCaseToLowerSnakeCase(test.in); got != lower {
+		if got := struct2env.CamelCaseToLowerSnakeCase(test.in); got != lower {
 			t.Errorf("for %q expected lower %q and got %q", test.in, lower, got)
 		}
 	}
@@ -90,7 +90,7 @@ func TestCamelCaseToLowerKebabCase(t *testing.T) {
 		{"HTTPSServer42", "https-server42"},
 	}
 	for _, test := range tests {
-		if got := env.CamelCaseToLowerKebabCase(test.in); got != test.out {
+		if got := struct2env.CamelCaseToLowerKebabCase(test.in); got != test.out {
 			t.Errorf("for %q expected %q and got %q", test.in, test.out, got)
 		}
 	}
@@ -140,15 +140,15 @@ func TestStructToEnvVars(t *testing.T) {
 	}
 	foo.InnerA = "inner a"
 	foo.InnerB = "inner b"
-	empty := env.StructToEnvVars(42) // error/empty
+	empty := struct2env.StructToEnvVars(42) // error/empty
 	if len(empty) != 0 {
 		t.Errorf("expected empty, got %v", empty)
 	}
-	envVars := env.StructToEnvVars(&foo)
+	envVars := struct2env.StructToEnvVars(&foo)
 	if len(envVars) != 11 {
 		t.Errorf("expected 11 env vars, got %d: %+v", len(envVars), envVars)
 	}
-	str := env.ToShellWithPrefix("TST_", envVars)
+	str := struct2env.ToShellWithPrefix("TST_", envVars)
 	//nolint:lll
 	expected := `TST_FOO="a\nfoo with \" quotes and \\ and '"
 TST_BAR="42str"
@@ -186,7 +186,7 @@ func TestSetFromEnv(t *testing.T) {
 	for _, e := range envs {
 		os.Setenv(e.k, e.v)
 	}
-	env.SetFromEnv("TST2_", &foo)
+	struct2env.SetFromEnv("TST2_", &foo)
 	assert.Equal(t, foo.Foo, "another\nfoo")
 	assert.Equal(t, foo.Bar, "bar")
 	assert.Equal(t, foo.RecurseHere.InnerB, "in1")
