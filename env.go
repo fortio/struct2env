@@ -5,7 +5,7 @@
 // conventions, which is useful for generating or parsing environment variables,
 // JSON tags, or command line flags.
 //
-// The package defines several case conversion functions that aid in manipulating
+// The package also defines several case conversion functions that aid in manipulating
 // strings to fit conventional casing for various programming and configuration contexts.
 // Additionally, it provides functions to serialize structs into slices of key-value pairs
 // where the keys are derived from struct field names transformed to upper snake case by default,
@@ -195,37 +195,6 @@ func structToEnvVars(prefix string, s interface{}) []KeyValue {
 	return envVars
 }
 
-// TODO: consider returning errors or at least counting issues.
-
-// setInt sets an integer field from a string.
-func setInt(fieldValue reflect.Value, val string) {
-	intVal, err := strconv.ParseInt(val, 10, fieldValue.Type().Bits())
-	if err != nil {
-		log.Errf("Invalid integer value %q: %v", val, err)
-		return
-	}
-	fieldValue.SetInt(intVal)
-}
-
-// setFloat sets a float field from a string.
-func setFloat(fieldValue reflect.Value, val string) {
-	floatVal, err := strconv.ParseFloat(val, fieldValue.Type().Bits())
-	if err != nil {
-		log.Errf("Invalid float value %q: %v", val, err)
-		return
-	}
-	fieldValue.SetFloat(floatVal)
-}
-
-func setBool(fieldValue reflect.Value, val string) {
-	boolVal, err := strconv.ParseBool(val)
-	if err != nil {
-		log.Errf("Invalid bool value %q: %v", val, err)
-		return
-	}
-	fieldValue.SetBool(boolVal)
-}
-
 func setPointer(fieldValue reflect.Value) reflect.Value {
 	// Ensure we have a pointer to work with, allocate if nil.
 	if fieldValue.IsNil() {
@@ -249,15 +218,21 @@ func checkEnv(envName, fieldName string, fieldValue reflect.Value) *string {
 	return &val
 }
 
-func SetFromEnv(prefix string, s interface{}) {
+func SetFromEnv(prefix string, s interface{}) []error {
+	return setFromEnv(nil, prefix, s)
+}
+func setFromEnv(allErrors []error, prefix string, s interface{}) []error {
+	// TOOD: this is quite similar in structure to structToEnvVars() - can it be refactored with
+	// passing setter vs getter function and share the same iteration (yet a little bit of copy is the go way too)
 	v := reflect.ValueOf(s)
 	// if we're passed a pointer to a struct instead of the struct, let that work too
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()
 	}
 	if v.Kind() != reflect.Struct {
-		log.Errf("Unexpected kind %v, expected a struct", v.Kind())
-		return
+		err := fmt.Errorf("unexpected kind %v, expected a struct", v.Kind())
+		allErrors = append(allErrors, err)
+		return allErrors
 	}
 	t := v.Type()
 	for i := 0; i < t.NumField(); i++ {
@@ -295,18 +270,34 @@ func SetFromEnv(prefix string, s interface{}) {
 			kind = fieldValue.Type().Elem().Kind()
 			fieldValue = setPointer(fieldValue)
 		}
-
+		var err error
 		switch kind { //nolint: exhaustive // we have default: for the other cases
 		case reflect.String:
 			fieldValue.SetString(envVal)
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			setInt(fieldValue, envVal)
+			var ev int64
+			ev, err = strconv.ParseInt(envVal, 10, fieldValue.Type().Bits())
+			if err == nil {
+				fieldValue.SetInt(ev)
+			}
 		case reflect.Float32, reflect.Float64:
-			setFloat(fieldValue, envVal)
+			var ev float64
+			ev, err = strconv.ParseFloat(envVal, fieldValue.Type().Bits())
+			if err == nil {
+				fieldValue.SetFloat(ev)
+			}
 		case reflect.Bool:
-			setBool(fieldValue, envVal)
+			var ev bool
+			ev, err = strconv.ParseBool(envVal)
+			if err == nil {
+				fieldValue.SetBool(ev)
+			}
 		default:
-			log.Warnf("Unsupported type %v to set from %s=%q", kind, envName, envVal)
+			err = fmt.Errorf("unsupported type %v to set from %s=%q", kind, envName, envVal)
+		}
+		if err != nil {
+			allErrors = append(allErrors, err)
 		}
 	}
+	return allErrors
 }
