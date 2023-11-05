@@ -17,7 +17,7 @@
 //
 // The package leverages reflection to dynamically handle arbitrary struct types,
 // and logs its operations and errors using the 'fortio.org/log' package.
-package env
+package struct2env
 
 import (
 	"fmt"

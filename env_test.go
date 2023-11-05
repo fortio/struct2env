@@ -1,4 +1,4 @@
-package env_test
+package struct2env_test
 
 import (
 	"os"
@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"fortio.org/assert"
-	"fortio.org/dflag/env"
 	"fortio.org/log"
+	env "fortio.org/struct2env"
 )
 
 func TestSplitByCase(t *testing.T) {
