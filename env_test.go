@@ -186,7 +186,10 @@ func TestSetFromEnv(t *testing.T) {
 	for _, e := range envs {
 		os.Setenv(e.k, e.v)
 	}
-	struct2env.SetFromEnv("TST2_", &foo)
+	errors := struct2env.SetFromEnv("TST2_", &foo)
+	if len(errors) != 0 {
+		t.Errorf("Unexpectedly got errors :%v", errors)
+	}
 	assert.Equal(t, foo.Foo, "another\nfoo")
 	assert.Equal(t, foo.Bar, "bar")
 	assert.Equal(t, foo.RecurseHere.InnerB, "in1")

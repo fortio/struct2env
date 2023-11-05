@@ -221,8 +221,9 @@ func checkEnv(envName, fieldName string, fieldValue reflect.Value) *string {
 func SetFromEnv(prefix string, s interface{}) []error {
 	return setFromEnv(nil, prefix, s)
 }
+
 func setFromEnv(allErrors []error, prefix string, s interface{}) []error {
-	// TOOD: this is quite similar in structure to structToEnvVars() - can it be refactored with
+	// TODO: this is quite similar in structure to structToEnvVars() - can it be refactored with
 	// passing setter vs getter function and share the same iteration (yet a little bit of copy is the go way too)
 	v := reflect.ValueOf(s)
 	// if we're passed a pointer to a struct instead of the struct, let that work too
