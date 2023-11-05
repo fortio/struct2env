@@ -2,11 +2,10 @@ package struct2env_test
 
 import (
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
-	"fortio.org/assert"
-	"fortio.org/log"
 	"fortio.org/struct2env"
 )
 
@@ -37,7 +36,9 @@ func TestSplitByCase(t *testing.T) {
 	}
 	for _, test := range tests {
 		got := struct2env.SplitByCase(test.in)
-		assert.Equal(t, got, test.out, "mismatch for", test.in)
+		if !reflect.DeepEqual(got, test.out) {
+			t.Errorf("mismatch for %q: got %v expected %v", test.in, got, test.out)
+		}
 	}
 }
 
@@ -122,7 +123,6 @@ type FooConfig struct {
 }
 
 func TestStructToEnvVars(t *testing.T) {
-	log.SetLogLevelQuiet(log.Verbose)
 	intV := 199
 	foo := FooConfig{
 		Foo:          "a\nfoo with \" quotes and \\ and '",
@@ -140,11 +140,17 @@ func TestStructToEnvVars(t *testing.T) {
 	}
 	foo.InnerA = "inner a"
 	foo.InnerB = "inner b"
-	empty := struct2env.StructToEnvVars(42) // error/empty
+	empty, errors := struct2env.StructToEnvVars(42) // error/empty
 	if len(empty) != 0 {
 		t.Errorf("expected empty, got %v", empty)
 	}
-	envVars := struct2env.StructToEnvVars(&foo)
+	if len(errors) != 1 {
+		t.Errorf("expected errors, got %v", errors)
+	}
+	envVars, errors := struct2env.StructToEnvVars(&foo)
+	if len(errors) != 0 {
+		t.Errorf("expected no error, got %v", errors)
+	}
 	if len(envVars) != 11 {
 		t.Errorf("expected 11 env vars, got %d: %+v", len(envVars), envVars)
 	}
@@ -169,7 +175,6 @@ export TST_FOO TST_BAR TST_A_SPECIAL_BLAH TST_A_BOOL TST_HTTP_SERVER TST_INT_POI
 }
 
 func TestSetFromEnv(t *testing.T) {
-	log.SetLogLevelQuiet(log.Verbose)
 	foo := FooConfig{}
 	envs := []struct {
 		k string
@@ -190,13 +195,9 @@ func TestSetFromEnv(t *testing.T) {
 	if len(errors) != 0 {
 		t.Errorf("Unexpectedly got errors :%v", errors)
 	}
-	assert.Equal(t, foo.Foo, "another\nfoo")
-	assert.Equal(t, foo.Bar, "bar")
-	assert.Equal(t, foo.RecurseHere.InnerB, "in1")
-	assert.Equal(t, foo.Blah, 31)
-	assert.Equal(t, foo.ABool, true)
-	assert.NotEqual(t, foo.FloatPointer, nil)
-	assert.Equal(t, *foo.FloatPointer, 5.75)
-	assert.NotEqual(t, foo.IntPointer, nil)
-	assert.Equal(t, *foo.IntPointer, 73)
+	if foo.Foo != "another\nfoo" || foo.Bar != "bar" || foo.RecurseHere.InnerB != "in1" || foo.Blah != 31 || foo.ABool != true ||
+		foo.FloatPointer == nil || *foo.FloatPointer != 5.75 ||
+		foo.IntPointer == nil || *foo.IntPointer != 73 {
+		t.Errorf("Mismatch in object values, got: %+v", foo)
+	}
 }

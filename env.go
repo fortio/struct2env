@@ -16,7 +16,7 @@
 // shell-compatible output for environment variable definitions.
 //
 // The package leverages reflection to dynamically handle arbitrary struct types,
-// and logs its operations and errors using the 'fortio.org/log' package.
+// and has 0 dependencies.
 package struct2env
 
 import (
@@ -26,8 +26,6 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
-
-	"fortio.org/log"
 )
 
 // Split strings into words, using CamelCase/camelCase/CAMELCase rules.
@@ -141,20 +139,23 @@ func SerializeValue(value interface{}) string {
 // If the field is exportable and the tag is missing we'll use the field name
 // converted to UPPER_SNAKE_CASE (using CamelCaseToUpperSnakeCase()) as the
 // environment variable name.
-func StructToEnvVars(s interface{}) []KeyValue {
-	return structToEnvVars("", s)
+func StructToEnvVars(s interface{}) ([]KeyValue, []error) {
+	var allErrors []error
+	var allKeyValVals []KeyValue
+	return structToEnvVars(allKeyValVals, allErrors, "", s)
 }
 
-func structToEnvVars(prefix string, s interface{}) []KeyValue {
-	var envVars []KeyValue
+// Appends additional results and errors to incoming envVars and allErrors and return them (for recursion).
+func structToEnvVars(envVars []KeyValue, allErrors []error, prefix string, s interface{}) ([]KeyValue, []error) {
 	v := reflect.ValueOf(s)
 	// if we're passed a pointer to a struct instead of the struct, let that work too
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()
 	}
 	if v.Kind() != reflect.Struct {
-		log.Errf("Unexpected kind %v, expected a struct", v.Kind())
-		return envVars
+		err := fmt.Errorf("unexpected kind %v, expected a struct", v.Kind())
+		allErrors = append(allErrors, err)
+		return envVars, allErrors
 	}
 	t := v.Type()
 	for i := 0; i < t.NumField(); i++ {
@@ -165,7 +166,7 @@ func structToEnvVars(prefix string, s interface{}) []KeyValue {
 		}
 		if fieldType.Anonymous {
 			// Recurse
-			envVars = append(envVars, structToEnvVars("", v.Field(i).Interface())...)
+			envVars, allErrors = structToEnvVars(envVars, allErrors, "", v.Field(i).Interface())
 			continue
 		}
 		if tag == "" {
@@ -180,11 +181,11 @@ func structToEnvVars(prefix string, s interface{}) []KeyValue {
 				stringValue = SerializeValue(fieldValue.Interface())
 			}
 		case reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
-			log.LogVf("Skipping field %s of type %v, not supported", fieldType.Name, fieldType.Type)
+			// log.LogVf("Skipping field %s of type %v, not supported", fieldType.Name, fieldType.Type)
 			continue
 		case reflect.Struct:
 			// Recurse with prefix
-			envVars = append(envVars, structToEnvVars(tag+"_", fieldValue.Interface())...)
+			envVars, allErrors = structToEnvVars(envVars, allErrors, tag+"_", fieldValue.Interface())
 			continue
 		default:
 			value := fieldValue.Interface()
@@ -192,7 +193,7 @@ func structToEnvVars(prefix string, s interface{}) []KeyValue {
 		}
 		envVars = append(envVars, KeyValue{Key: prefix + tag, Value: stringValue})
 	}
-	return envVars
+	return envVars, allErrors
 }
 
 func setPointer(fieldValue reflect.Value) reflect.Value {
@@ -204,18 +205,18 @@ func setPointer(fieldValue reflect.Value) reflect.Value {
 	return fieldValue.Elem()
 }
 
-func checkEnv(envName, fieldName string, fieldValue reflect.Value) *string {
+func checkEnv(envName, fieldName string, fieldValue reflect.Value) (*string, error) {
 	val, found := os.LookupEnv(envName)
 	if !found {
-		log.LogVf("%q not set for %s", envName, fieldName)
-		return nil
+		// log.LogVf("%q not set for %s", envName, fieldName)
+		return nil, nil //nolint:nilnil
 	}
-	log.Infof("Found %s=%q to set %s", envName, val, fieldName)
+	// log.Infof("Found %s=%q to set %s", envName, val, fieldName)
 	if !fieldValue.CanSet() {
-		log.Errf("Can't set %s (found %s=%q)", fieldName, envName, val)
-		return nil
+		err := fmt.Errorf("can't set %s (found %s=%q)", fieldName, envName, val)
+		return nil, err
 	}
-	return &val
+	return &val, nil
 }
 
 func SetFromEnv(prefix string, s interface{}) []error {
@@ -255,12 +256,16 @@ func setFromEnv(allErrors []error, prefix string, s interface{}) []error {
 			if fieldValue.CanAddr() { // Check if we can get the address
 				SetFromEnv(envName+"_", fieldValue.Addr().Interface())
 			} else {
-				log.Errf("Cannot take the address of %s to recurse", fieldType.Name)
+				err := fmt.Errorf("cannot take the address of %s to recurse", fieldType.Name)
+				allErrors = append(allErrors, err)
 			}
 			continue
 		}
-
-		val := checkEnv(envName, fieldType.Name, fieldValue)
+		val, err := checkEnv(envName, fieldType.Name, fieldValue)
+		if err != nil {
+			allErrors = append(allErrors, err)
+			continue
+		}
 		if val == nil {
 			continue
 		}
@@ -271,7 +276,6 @@ func setFromEnv(allErrors []error, prefix string, s interface{}) []error {
 			kind = fieldValue.Type().Elem().Kind()
 			fieldValue = setPointer(fieldValue)
 		}
-		var err error
 		switch kind { //nolint: exhaustive // we have default: for the other cases
 		case reflect.String:
 			fieldValue.SetString(envVal)
