@@ -24,16 +24,18 @@ type FooConfig struct {
 
 Turns into
 ```shell
-TST_FOO="a\nfoo with \" quotes and \\ and '"
-TST_BAR="42str"
-TST_A_SPECIAL_BLAH="42"
+TST_FOO='a
+foo with $, `, " quotes, \ and '\'' quotes'
+TST_BAR='42str'
+TST_A_SPECIAL_BLAH='42'
 TST_A_BOOL=true
-TST_HTTP_SERVER="http://localhost:8080"
-TST_INT_POINTER="199"
+TST_HTTP_SERVER='http://localhost:8080'
+TST_INT_POINTER='199'
+TST_FLOAT_POINTER='3.14'
 ```
 
 Using
 ```go
 kv, errs := struct2env.StructToEnvVars(foo)
-struct2env.ToShellWithPrefix("TST_", kv)
+txt := struct2env.ToShellWithPrefix("TST_", kv)
 ```
