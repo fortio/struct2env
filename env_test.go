@@ -123,7 +123,7 @@ type FooConfig struct {
 func TestStructToEnvVars(t *testing.T) {
 	intV := 199
 	foo := FooConfig{
-		Foo:          "a\nfoo with \" quotes and \\ and '",
+		Foo:          "a\nfoo with $X, `backticks`, \" quotes and \\ and ' in middle and end '",
 		Bar:          "42str",
 		Blah:         42,
 		ABool:        true,
@@ -154,17 +154,18 @@ func TestStructToEnvVars(t *testing.T) {
 	}
 	str := ToShellWithPrefix("TST_", envVars)
 	//nolint:lll
-	expected := `TST_FOO="a\nfoo with \" quotes and \\ and '"
-TST_BAR="42str"
-TST_A_SPECIAL_BLAH="42"
+	expected := `TST_FOO='a
+foo with $X, ` + "`backticks`" + `, " quotes and \ and '\'' in middle and end '\'''
+TST_BAR='42str'
+TST_A_SPECIAL_BLAH='42'
 TST_A_BOOL=true
-TST_HTTP_SERVER="http://localhost:8080"
-TST_INT_POINTER="199"
+TST_HTTP_SERVER='http://localhost:8080'
+TST_INT_POINTER='199'
 TST_FLOAT_POINTER=
-TST_INNER_A="inner a"
-TST_INNER_B="inner b"
-TST_RECURSE_HERE_INNER_A="rec a"
-TST_RECURSE_HERE_INNER_B="rec b"
+TST_INNER_A='inner a'
+TST_INNER_B='inner b'
+TST_RECURSE_HERE_INNER_A='rec a'
+TST_RECURSE_HERE_INNER_B='rec b'
 export TST_FOO TST_BAR TST_A_SPECIAL_BLAH TST_A_BOOL TST_HTTP_SERVER TST_INT_POINTER TST_FLOAT_POINTER TST_INNER_A TST_INNER_B TST_RECURSE_HERE_INNER_A TST_RECURSE_HERE_INNER_B
 `
 	if str != expected {

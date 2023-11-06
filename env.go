@@ -88,13 +88,25 @@ func CamelCaseToLowerKebabCase(s string) string {
 	return strings.ToLower(strings.Join(words, "-"))
 }
 
+// Intermediate result list from StructToEnvVars(), both the Key and QuotedValue
+// must be shell safe/non adversarial as they are emitted as is by String() with = in between.
+// Using StructToEnvVars produces safe values even with adversarial input (length notwithstanding).
 type KeyValue struct {
-	Key   string
-	Value string // Already quoted/escaped.
+	Key         string // Must be safe (is when coming from Go struct names but could be bad with env:).
+	QuotedValue string // (Must be) Already quoted/escaped.
+}
+
+// Escape characters such as the result string can be embedded as a single argument in a shell fragment
+// e.g for ENV_VAR=<value> such as <value> is safe (no $(cmd...) no ` etc`).
+func ShellQuote(input string) string {
+	// To emit a single quote in a single quote enclosed string you have to close the current ' then emit a quote (\'),
+	// then reopen the single quote sequence to finish. Note that when the string ends with a quote there is an unnecessary
+	// trailing ''.
+	return "'" + strings.ReplaceAll(input, "'", `'\''`) + "'"
 }
 
 func (kv KeyValue) String() string {
-	return fmt.Sprintf("%s=%s", kv.Key, kv.Value)
+	return fmt.Sprintf("%s=%s", kv.Key, kv.QuotedValue)
 }
 
 func ToShell(kvl []KeyValue) string {
@@ -126,9 +138,9 @@ func SerializeValue(value interface{}) string {
 		}
 		return res
 	case string:
-		return strconv.Quote(v)
+		return ShellQuote(v)
 	default:
-		return strconv.Quote(fmt.Sprint(value))
+		return ShellQuote(fmt.Sprint(value))
 	}
 }
 
@@ -191,7 +203,7 @@ func structToEnvVars(envVars []KeyValue, allErrors []error, prefix string, s int
 			value := fieldValue.Interface()
 			stringValue = SerializeValue(value)
 		}
-		envVars = append(envVars, KeyValue{Key: prefix + tag, Value: stringValue})
+		envVars = append(envVars, KeyValue{Key: prefix + tag, QuotedValue: stringValue})
 	}
 	return envVars, allErrors
 }
