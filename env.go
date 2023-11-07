@@ -307,7 +307,8 @@ func setFromEnv(allErrors []error, envLookup EnvLookup, prefix string, s interfa
 
 		kind := fieldValue.Kind()
 
-		if kind == reflect.Struct {
+		// Handle time.Time separately a bit below after we get the value
+		if kind == reflect.Struct && fieldType.Type != reflect.TypeOf(time.Time{}) {
 			// Recurse with prefix
 			if fieldValue.CanAddr() { // Check if we can get the address
 				allErrors = setFromEnv(allErrors, envLookup, envName+"_", fieldValue.Addr().Interface())
@@ -332,14 +333,33 @@ func setFromEnv(allErrors []error, envLookup EnvLookup, prefix string, s interfa
 			kind = fieldValue.Type().Elem().Kind()
 			fieldValue = setPointer(fieldValue)
 		}
+		if fieldType.Type == reflect.TypeOf(time.Time{}) {
+			var timeField time.Time
+			timeField, err = time.Parse(time.RFC3339, envVal)
+			if err == nil {
+				fieldValue.Set(reflect.ValueOf(timeField))
+			} else {
+				allErrors = append(allErrors, err)
+			}
+			continue
+		}
 		switch kind { //nolint: exhaustive // we have default: for the other cases
 		case reflect.String:
 			fieldValue.SetString(envVal)
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			var ev int64
-			ev, err = strconv.ParseInt(envVal, 10, fieldValue.Type().Bits())
-			if err == nil {
-				fieldValue.SetInt(ev)
+			// if it's a duration, parse it as a float seconds
+			if fieldType.Type == reflect.TypeOf(time.Duration(0)) {
+				var ev float64
+				ev, err = strconv.ParseFloat(envVal, 64)
+				if err == nil {
+					fieldValue.SetInt(int64(ev * float64(1*time.Second)))
+				}
+			} else {
+				var ev int64
+				ev, err = strconv.ParseInt(envVal, 10, fieldValue.Type().Bits())
+				if err == nil {
+					fieldValue.SetInt(ev)
+				}
 			}
 		case reflect.Float32, reflect.Float64:
 			var ev float64

@@ -208,6 +208,8 @@ func TestSetFromEnv(t *testing.T) {
 		"TST2_FLOAT_POINTER":        "5.75",
 		"TST2_INT_POINTER":          "73",
 		"TST2_SOME_BINARY":          "QUJDAERFRg==",
+		"TST2_DUR":                  "123.456789",
+		"TST2_TS":                   "1998-11-05T14:30:00Z",
 	}
 	lookup := func(key string) (string, bool) {
 		value, found := envs[key]
@@ -228,5 +230,16 @@ func TestSetFromEnv(t *testing.T) {
 	}
 	if string(foo.SomeBinary) != "ABC\x00DEF" {
 		t.Errorf("Base64 decoding not working for []byte field: %q", string(foo.SomeBinary))
+	}
+	if foo.Dur != 123456789*time.Microsecond {
+		t.Errorf("Duration not set correctly: %v", foo.Dur)
+	}
+	if foo.TS != time.Date(1998, time.November, 5, 14, 30, 0, 0, time.UTC) {
+		t.Errorf("Time not set correctly: %v", foo.TS)
+	}
+	envs["TST2_TS"] = "not a rfc3339 time"
+	errors = SetFrom(lookup, "TST2_", &foo)
+	if len(errors) != 1 {
+		t.Errorf("Expected 1 error, got %v", errors)
 	}
 }
