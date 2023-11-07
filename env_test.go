@@ -1,7 +1,6 @@
 package struct2env
 
 import (
-	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -200,30 +199,32 @@ export TST_FOO TST_BAR TST_A_SPECIAL_BLAH TST_A_BOOL TST_HTTP_SERVER TST_INT_POI
 
 func TestSetFromEnv(t *testing.T) {
 	foo := FooConfig{}
-	envs := []struct {
-		k string
-		v string
-	}{
-		{"TST2_FOO", "another\nfoo"},
-		{"TST2_BAR", "bar"},
-		{"TST2_RECURSE_HERE_INNER_B", "in1"},
-		{"TST2_A_SPECIAL_BLAH", "31"},
-		{"TST2_A_BOOL", "1"},
-		{"TST2_FLOAT_POINTER", "5.75"},
-		{"TST2_INT_POINTER", "73"},
-		{"TST2_SOME_BINARY", "QUJDAERFRg=="},
+	envs := map[string]string{
+		"TST2_FOO":                  "another\nfoo",
+		"TST2_BAR":                  "bar",
+		"TST2_RECURSE_HERE_INNER_B": "in1",
+		"TST2_A_SPECIAL_BLAH":       "31",
+		"TST2_A_BOOL":               "1",
+		"TST2_FLOAT_POINTER":        "5.75",
+		"TST2_INT_POINTER":          "73",
+		"TST2_SOME_BINARY":          "QUJDAERFRg==",
 	}
-	for _, e := range envs {
-		os.Setenv(e.k, e.v)
+	lookup := func(key string) (string, bool) {
+		value, found := envs[key]
+		return value, found
 	}
-	errors := SetFromEnv("TST2_", &foo)
+	errors := SetFrom(lookup, "TST2_", &foo)
 	if len(errors) != 0 {
 		t.Errorf("Unexpectedly got errors :%v", errors)
 	}
-	if foo.Foo != "another\nfoo" || foo.Bar != "bar" || foo.RecurseHere.InnerB != "in1" || foo.Blah != 31 || foo.ABool != true ||
-		foo.FloatPointer == nil || *foo.FloatPointer != 5.75 ||
-		foo.IntPointer == nil || *foo.IntPointer != 73 {
+	if foo.Foo != "another\nfoo" || foo.Bar != "bar" || foo.RecurseHere.InnerB != "in1" || foo.Blah != 31 || foo.ABool != true {
 		t.Errorf("Mismatch in object values, got: %+v", foo)
+	}
+	if foo.IntPointer == nil || *foo.IntPointer != 73 {
+		t.Errorf("IntPointer not set correctly: %v %v", foo.IntPointer, *foo.IntPointer)
+	}
+	if foo.FloatPointer == nil || *foo.FloatPointer != 5.75 {
+		t.Errorf("FloatPointer not set correctly: %v %v", foo.FloatPointer, *foo.FloatPointer)
 	}
 	if string(foo.SomeBinary) != "ABC\x00DEF" {
 		t.Errorf("Base64 decoding not working for []byte field: %q", string(foo.SomeBinary))

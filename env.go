@@ -254,7 +254,7 @@ func setPointer(fieldValue reflect.Value) reflect.Value {
 }
 
 func checkEnv(envLookup EnvLookup, envName, fieldName string, fieldValue reflect.Value) (*string, error) {
-	val, found := envLookup.LookupEnv(envName)
+	val, found := envLookup(envName)
 	if !found {
 		// log.LogVf("%q not set for %s", envName, fieldName)
 		return nil, nil //nolint:nilnil
@@ -267,22 +267,11 @@ func checkEnv(envLookup EnvLookup, envName, fieldName string, fieldValue reflect
 	return &val, nil
 }
 
-// EnvLookup defines the interface for looking up environment variables.
-type EnvLookup interface {
-	LookupEnv(key string) (string, bool)
-}
-
-// DefaultEnvLookup implements the EnvLookup interface using the os package.
-type DefaultEnvLookup struct{}
-
-// LookupEnv for DefaultEnvLookup uses the os.LookupEnv function.
-func (DefaultEnvLookup) LookupEnv(key string) (string, bool) {
-	return os.LookupEnv(key)
-}
+type EnvLookup func(key string) (string, bool)
 
 // Reverse of StructToEnvVars, assumes the same encoding. Using the current os environment variables as source.
 func SetFromEnv(prefix string, s interface{}) []error {
-	return SetFrom(DefaultEnvLookup{}, prefix, s)
+	return SetFrom(os.LookupEnv, prefix, s)
 }
 
 // Reverse of StructToEnvVars, assumes the same encoding. Using passed it lookup object that can lookup values by keys.
@@ -321,7 +310,7 @@ func setFromEnv(allErrors []error, envLookup EnvLookup, prefix string, s interfa
 		if kind == reflect.Struct {
 			// Recurse with prefix
 			if fieldValue.CanAddr() { // Check if we can get the address
-				SetFromEnv(envName+"_", fieldValue.Addr().Interface())
+				allErrors = setFromEnv(allErrors, envLookup, envName+"_", fieldValue.Addr().Interface())
 			} else {
 				err := fmt.Errorf("cannot take the address of %s to recurse", fieldType.Name)
 				allErrors = append(allErrors, err)
