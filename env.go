@@ -343,50 +343,62 @@ func setFromEnv(allErrors []error, envLookup EnvLookup, prefix string, s interfa
 			}
 			continue
 		}
-		switch kind { //nolint: exhaustive // we have default: for the other cases
-		case reflect.String:
-			fieldValue.SetString(envVal)
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			// if it's a duration, parse it as a float seconds
-			if fieldType.Type == reflect.TypeOf(time.Duration(0)) {
-				var ev float64
-				ev, err = strconv.ParseFloat(envVal, 64)
-				if err == nil {
-					fieldValue.SetInt(int64(ev * float64(1*time.Second)))
-				}
-			} else {
-				var ev int64
-				ev, err = strconv.ParseInt(envVal, 10, fieldValue.Type().Bits())
-				if err == nil {
-					fieldValue.SetInt(ev)
-				}
-			}
-		case reflect.Float32, reflect.Float64:
+		allErrors = setValue(allErrors, fieldType, fieldValue, kind, envName, envVal)
+	}
+	return allErrors
+}
+
+func setValue(
+	allErrors []error,
+	fieldType reflect.StructField,
+	fieldValue reflect.Value,
+	kind reflect.Kind,
+	envName, envVal string,
+) []error {
+	var err error
+	switch kind { //nolint: exhaustive // we have default: for the other cases
+	case reflect.String:
+		fieldValue.SetString(envVal)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		// if it's a duration, parse it as a float seconds
+		if fieldType.Type == reflect.TypeOf(time.Duration(0)) {
 			var ev float64
-			ev, err = strconv.ParseFloat(envVal, fieldValue.Type().Bits())
+			ev, err = strconv.ParseFloat(envVal, 64)
 			if err == nil {
-				fieldValue.SetFloat(ev)
+				fieldValue.SetInt(int64(ev * float64(1*time.Second)))
 			}
-		case reflect.Bool:
-			var ev bool
-			ev, err = strconv.ParseBool(envVal)
+		} else {
+			var ev int64
+			ev, err = strconv.ParseInt(envVal, 10, fieldValue.Type().Bits())
 			if err == nil {
-				fieldValue.SetBool(ev)
+				fieldValue.SetInt(ev)
 			}
-		case reflect.Slice:
-			if fieldValue.Type().Elem().Kind() != reflect.Uint8 {
-				err = fmt.Errorf("unsupported slice of %v to set from %s=%q", fieldValue.Type().Elem().Kind(), envName, envVal)
-			} else {
-				var data []byte
-				data, err = base64.StdEncoding.DecodeString(envVal)
-				fieldValue.SetBytes(data)
-			}
-		default:
-			err = fmt.Errorf("unsupported type %v to set from %s=%q", kind, envName, envVal)
 		}
-		if err != nil {
-			allErrors = append(allErrors, err)
+	case reflect.Float32, reflect.Float64:
+		var ev float64
+		ev, err = strconv.ParseFloat(envVal, fieldValue.Type().Bits())
+		if err == nil {
+			fieldValue.SetFloat(ev)
 		}
+	case reflect.Bool:
+		var ev bool
+		ev, err = strconv.ParseBool(envVal)
+		if err == nil {
+			fieldValue.SetBool(ev)
+		}
+	case reflect.Slice:
+		if fieldValue.Type().Elem().Kind() != reflect.Uint8 {
+			err = fmt.Errorf("unsupported slice of %v to set from %s=%q", fieldValue.Type().Elem().Kind(), envName, envVal)
+		} else {
+			var data []byte
+			data, err = base64.StdEncoding.DecodeString(envVal)
+			fieldValue.SetBytes(data)
+		}
+	default:
+		err = fmt.Errorf("unsupported type %v to set from %s=%q", kind, envName, envVal)
+	}
+	if err != nil {
+		allErrors = append(allErrors, err)
 	}
 	return allErrors
 }
