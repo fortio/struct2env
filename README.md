@@ -39,3 +39,10 @@ Using
 kv, errs := struct2env.StructToEnvVars(foo)
 txt := struct2env.ToShellWithPrefix("TST_", kv)
 ```
+
+Type conversions:
+
+- Most primitive type to their string representation, single quote (') escaped.
+- []byte are encoded as base64
+- time.Time are formatted as RFC3339
+- time.Duration are in (floating point) seconds.

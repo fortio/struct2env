@@ -1,10 +1,10 @@
 package struct2env
 
 import (
-	"os"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSplitByCase(t *testing.T) {
@@ -118,12 +118,15 @@ type FooConfig struct {
 	Embedded
 	HiddenEmbedded `env:"-"`
 	RecurseHere    Embedded
+	SomeBinary     []byte
+	Dur            time.Duration
+	TS             time.Time
 }
 
 func TestStructToEnvVars(t *testing.T) {
 	intV := 199
 	foo := FooConfig{
-		Foo:          "a\nfoo with $X, `backticks`, \" quotes and \\ and ' in middle and end '",
+		Foo:          "a newline:\nfoo with $X, `backticks`, \" quotes and \\ and ' in middle and end '",
 		Bar:          "42str",
 		Blah:         42,
 		ABool:        true,
@@ -135,6 +138,9 @@ func TestStructToEnvVars(t *testing.T) {
 			InnerA: "rec a",
 			InnerB: "rec b",
 		},
+		SomeBinary: []byte{0, 1, 2},
+		Dur:        1*time.Hour + 100*time.Millisecond,
+		TS:         time.Date(1998, time.November, 5, 14, 30, 0, 0, time.UTC),
 	}
 	foo.InnerA = "inner a"
 	foo.InnerB = "inner b"
@@ -149,12 +155,12 @@ func TestStructToEnvVars(t *testing.T) {
 	if len(errors) != 0 {
 		t.Errorf("expected no error, got %v", errors)
 	}
-	if len(envVars) != 11 {
-		t.Errorf("expected 11 env vars, got %d: %+v", len(envVars), envVars)
+	if len(envVars) != 14 {
+		t.Errorf("expected 14 env vars, got %d: %+v", len(envVars), envVars)
 	}
 	str := ToShellWithPrefix("TST_", envVars)
 	//nolint:lll
-	expected := `TST_FOO='a
+	expected := `TST_FOO='a newline:
 foo with $X, ` + "`backticks`" + `, " quotes and \ and '\'' in middle and end '\'''
 TST_BAR='42str'
 TST_A_SPECIAL_BLAH='42'
@@ -166,37 +172,74 @@ TST_INNER_A='inner a'
 TST_INNER_B='inner b'
 TST_RECURSE_HERE_INNER_A='rec a'
 TST_RECURSE_HERE_INNER_B='rec b'
-export TST_FOO TST_BAR TST_A_SPECIAL_BLAH TST_A_BOOL TST_HTTP_SERVER TST_INT_POINTER TST_FLOAT_POINTER TST_INNER_A TST_INNER_B TST_RECURSE_HERE_INNER_A TST_RECURSE_HERE_INNER_B
+TST_SOME_BINARY='AAEC'
+TST_DUR=3600.1
+TST_TS='1998-11-05T14:30:00Z'
+export TST_FOO TST_BAR TST_A_SPECIAL_BLAH TST_A_BOOL TST_HTTP_SERVER TST_INT_POINTER TST_FLOAT_POINTER TST_INNER_A TST_INNER_B TST_RECURSE_HERE_INNER_A TST_RECURSE_HERE_INNER_B TST_SOME_BINARY TST_DUR TST_TS
 `
 	if str != expected {
 		t.Errorf("\n---expected:---\n%s\n---got:---\n%s", expected, str)
+	}
+	// NUL in string
+	type Cfg struct {
+		Foo string
+	}
+	cfg := Cfg{Foo: "ABC\x00DEF"}
+	envVars, errors = StructToEnvVars(&cfg)
+	if len(errors) != 1 {
+		t.Errorf("Should have had error with embedded NUL")
+	}
+	if envVars[0].Key != "FOO" {
+		t.Errorf("Expecting key to be present %v", envVars)
+	}
+	if envVars[0].QuotedValue != "" {
+		t.Errorf("Expecting value to be empty %v", envVars)
 	}
 }
 
 func TestSetFromEnv(t *testing.T) {
 	foo := FooConfig{}
-	envs := []struct {
-		k string
-		v string
-	}{
-		{"TST2_FOO", "another\nfoo"},
-		{"TST2_BAR", "bar"},
-		{"TST2_RECURSE_HERE_INNER_B", "in1"},
-		{"TST2_A_SPECIAL_BLAH", "31"},
-		{"TST2_A_BOOL", "1"},
-		{"TST2_FLOAT_POINTER", "5.75"},
-		{"TST2_INT_POINTER", "73"},
+	envs := map[string]string{
+		"TST2_FOO":                  "another\nfoo",
+		"TST2_BAR":                  "bar",
+		"TST2_RECURSE_HERE_INNER_B": "in1",
+		"TST2_A_SPECIAL_BLAH":       "31",
+		"TST2_A_BOOL":               "1",
+		"TST2_FLOAT_POINTER":        "5.75",
+		"TST2_INT_POINTER":          "73",
+		"TST2_SOME_BINARY":          "QUJDAERFRg==",
+		"TST2_DUR":                  "123.456789",
+		"TST2_TS":                   "1998-11-05T14:30:00Z",
 	}
-	for _, e := range envs {
-		os.Setenv(e.k, e.v)
+	lookup := func(key string) (string, bool) {
+		value, found := envs[key]
+		return value, found
 	}
-	errors := SetFromEnv("TST2_", &foo)
+	errors := SetFrom(lookup, "TST2_", &foo)
 	if len(errors) != 0 {
 		t.Errorf("Unexpectedly got errors :%v", errors)
 	}
-	if foo.Foo != "another\nfoo" || foo.Bar != "bar" || foo.RecurseHere.InnerB != "in1" || foo.Blah != 31 || foo.ABool != true ||
-		foo.FloatPointer == nil || *foo.FloatPointer != 5.75 ||
-		foo.IntPointer == nil || *foo.IntPointer != 73 {
+	if foo.Foo != "another\nfoo" || foo.Bar != "bar" || foo.RecurseHere.InnerB != "in1" || foo.Blah != 31 || foo.ABool != true {
 		t.Errorf("Mismatch in object values, got: %+v", foo)
+	}
+	if foo.IntPointer == nil || *foo.IntPointer != 73 {
+		t.Errorf("IntPointer not set correctly: %v %v", foo.IntPointer, *foo.IntPointer)
+	}
+	if foo.FloatPointer == nil || *foo.FloatPointer != 5.75 {
+		t.Errorf("FloatPointer not set correctly: %v %v", foo.FloatPointer, *foo.FloatPointer)
+	}
+	if string(foo.SomeBinary) != "ABC\x00DEF" {
+		t.Errorf("Base64 decoding not working for []byte field: %q", string(foo.SomeBinary))
+	}
+	if foo.Dur != 123456789*time.Microsecond {
+		t.Errorf("Duration not set correctly: %v", foo.Dur)
+	}
+	if foo.TS != time.Date(1998, time.November, 5, 14, 30, 0, 0, time.UTC) {
+		t.Errorf("Time not set correctly: %v", foo.TS)
+	}
+	envs["TST2_TS"] = "not a rfc3339 time"
+	errors = SetFrom(lookup, "TST2_", &foo)
+	if len(errors) != 1 {
+		t.Errorf("Expected 1 error, got %v", errors)
 	}
 }
