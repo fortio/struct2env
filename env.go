@@ -26,6 +26,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -146,6 +147,8 @@ func SerializeValue(value interface{}) (string, error) {
 		return ShellQuote(base64.StdEncoding.EncodeToString(v))
 	case string:
 		return ShellQuote(v)
+	case time.Duration:
+		return fmt.Sprintf("%g", v.Seconds()), nil
 	default:
 		return ShellQuote(fmt.Sprint(value))
 	}
@@ -158,6 +161,7 @@ func SerializeValue(value interface{}) (string, error) {
 // If the field is exportable and the tag is missing we'll use the field name
 // converted to UPPER_SNAKE_CASE (using CamelCaseToUpperSnakeCase()) as the
 // environment variable name.
+// []byte are encoded as base64, time.Time are formatted as RFC3339, time.Duration are in (floating point) seconds.
 func StructToEnvVars(s interface{}) ([]KeyValue, []error) {
 	var allErrors []error
 	var allKeyValVals []KeyValue
@@ -194,6 +198,18 @@ func structToEnvVars(envVars []KeyValue, allErrors []error, prefix string, s int
 		fieldValue := v.Field(i)
 		stringValue := ""
 		var err error
+
+		if fieldValue.Type() == reflect.TypeOf(time.Time{}) { // other wise we hit the "struct" case below
+			timeField := fieldValue.Interface().(time.Time)
+			stringValue, err = SerializeValue(timeField.Format(time.RFC3339))
+			if err != nil {
+				allErrors = append(allErrors, err)
+			} else {
+				envVars = append(envVars, KeyValue{Key: prefix + tag, QuotedValue: stringValue})
+			}
+			continue // Continue to the next field
+		}
+
 		switch fieldValue.Kind() { //nolint: exhaustive // we have default: for the other cases
 		case reflect.Ptr:
 			if !fieldValue.IsNil() {
@@ -213,8 +229,12 @@ func structToEnvVars(envVars []KeyValue, allErrors []error, prefix string, s int
 			envVars, allErrors = structToEnvVars(envVars, allErrors, tag+"_", fieldValue.Interface())
 			continue
 		default:
-			value := fieldValue.Interface()
-			stringValue, err = SerializeValue(value)
+			if !fieldValue.CanInterface() {
+				err = fmt.Errorf("can't interface %s", fieldType.Name)
+			} else {
+				value := fieldValue.Interface()
+				stringValue, err = SerializeValue(value)
+			}
 		}
 		envVars = append(envVars, KeyValue{Key: prefix + tag, QuotedValue: stringValue})
 		if err != nil {
@@ -233,8 +253,8 @@ func setPointer(fieldValue reflect.Value) reflect.Value {
 	return fieldValue.Elem()
 }
 
-func checkEnv(envName, fieldName string, fieldValue reflect.Value) (*string, error) {
-	val, found := os.LookupEnv(envName)
+func checkEnv(envLookup EnvLookup, envName, fieldName string, fieldValue reflect.Value) (*string, error) {
+	val, found := envLookup.LookupEnv(envName)
 	if !found {
 		// log.LogVf("%q not set for %s", envName, fieldName)
 		return nil, nil //nolint:nilnil
@@ -247,11 +267,30 @@ func checkEnv(envName, fieldName string, fieldValue reflect.Value) (*string, err
 	return &val, nil
 }
 
-func SetFromEnv(prefix string, s interface{}) []error {
-	return setFromEnv(nil, prefix, s)
+// EnvLookup defines the interface for looking up environment variables.
+type EnvLookup interface {
+	LookupEnv(key string) (string, bool)
 }
 
-func setFromEnv(allErrors []error, prefix string, s interface{}) []error {
+// DefaultEnvLookup implements the EnvLookup interface using the os package.
+type DefaultEnvLookup struct{}
+
+// LookupEnv for DefaultEnvLookup uses the os.LookupEnv function.
+func (DefaultEnvLookup) LookupEnv(key string) (string, bool) {
+	return os.LookupEnv(key)
+}
+
+// Reverse of StructToEnvVars, assumes the same encoding. Using the current os environment variables as source.
+func SetFromEnv(prefix string, s interface{}) []error {
+	return SetFrom(DefaultEnvLookup{}, prefix, s)
+}
+
+// Reverse of StructToEnvVars, assumes the same encoding. Using passed it lookup object that can lookup values by keys.
+func SetFrom(envLookup EnvLookup, prefix string, s interface{}) []error {
+	return setFromEnv(nil, envLookup, prefix, s)
+}
+
+func setFromEnv(allErrors []error, envLookup EnvLookup, prefix string, s interface{}) []error {
 	// TODO: this is quite similar in structure to structToEnvVars() - can it be refactored with
 	// passing setter vs getter function and share the same iteration (yet a little bit of copy is the go way too)
 	v := reflect.ValueOf(s)
@@ -289,7 +328,7 @@ func setFromEnv(allErrors []error, prefix string, s interface{}) []error {
 			}
 			continue
 		}
-		val, err := checkEnv(envName, fieldType.Name, fieldValue)
+		val, err := checkEnv(envLookup, envName, fieldType.Name, fieldValue)
 		if err != nil {
 			allErrors = append(allErrors, err)
 			continue

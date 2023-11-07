@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSplitByCase(t *testing.T) {
@@ -119,6 +120,8 @@ type FooConfig struct {
 	HiddenEmbedded `env:"-"`
 	RecurseHere    Embedded
 	SomeBinary     []byte
+	Dur            time.Duration
+	TS             time.Time
 }
 
 func TestStructToEnvVars(t *testing.T) {
@@ -137,6 +140,8 @@ func TestStructToEnvVars(t *testing.T) {
 			InnerB: "rec b",
 		},
 		SomeBinary: []byte{0, 1, 2},
+		Dur:        1*time.Hour + 100*time.Millisecond,
+		TS:         time.Date(1998, time.November, 5, 14, 30, 0, 0, time.UTC),
 	}
 	foo.InnerA = "inner a"
 	foo.InnerB = "inner b"
@@ -151,8 +156,8 @@ func TestStructToEnvVars(t *testing.T) {
 	if len(errors) != 0 {
 		t.Errorf("expected no error, got %v", errors)
 	}
-	if len(envVars) != 12 {
-		t.Errorf("expected 12 env vars, got %d: %+v", len(envVars), envVars)
+	if len(envVars) != 14 {
+		t.Errorf("expected 14 env vars, got %d: %+v", len(envVars), envVars)
 	}
 	str := ToShellWithPrefix("TST_", envVars)
 	//nolint:lll
@@ -169,7 +174,9 @@ TST_INNER_B='inner b'
 TST_RECURSE_HERE_INNER_A='rec a'
 TST_RECURSE_HERE_INNER_B='rec b'
 TST_SOME_BINARY='AAEC'
-export TST_FOO TST_BAR TST_A_SPECIAL_BLAH TST_A_BOOL TST_HTTP_SERVER TST_INT_POINTER TST_FLOAT_POINTER TST_INNER_A TST_INNER_B TST_RECURSE_HERE_INNER_A TST_RECURSE_HERE_INNER_B TST_SOME_BINARY
+TST_DUR=3600.1
+TST_TS='1998-11-05T14:30:00Z'
+export TST_FOO TST_BAR TST_A_SPECIAL_BLAH TST_A_BOOL TST_HTTP_SERVER TST_INT_POINTER TST_FLOAT_POINTER TST_INNER_A TST_INNER_B TST_RECURSE_HERE_INNER_A TST_RECURSE_HERE_INNER_B TST_SOME_BINARY TST_DUR TST_TS
 `
 	if str != expected {
 		t.Errorf("\n---expected:---\n%s\n---got:---\n%s", expected, str)
