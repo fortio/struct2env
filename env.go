@@ -20,6 +20,7 @@
 package struct2env
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"reflect"
@@ -97,12 +98,16 @@ type KeyValue struct {
 }
 
 // Escape characters such as the result string can be embedded as a single argument in a shell fragment
-// e.g for ENV_VAR=<value> such as <value> is safe (no $(cmd...) no ` etc`).
-func ShellQuote(input string) string {
+// e.g for ENV_VAR=<value> such as <value> is safe (no $(cmd...) no ` etc`). Will error out if NUL is found
+// in the input (use []byte for that and it'll get base64 encoded/decoded).
+func ShellQuote(input string) (string, error) {
+	if strings.ContainsRune(input, 0) {
+		return "", fmt.Errorf("String value %q should not contain NUL", input)
+	}
 	// To emit a single quote in a single quote enclosed string you have to close the current ' then emit a quote (\'),
 	// then reopen the single quote sequence to finish. Note that when the string ends with a quote there is an unnecessary
 	// trailing ''.
-	return "'" + strings.ReplaceAll(input, "'", `'\''`) + "'"
+	return "'" + strings.ReplaceAll(input, "'", `'\''`) + "'", nil
 }
 
 func (kv KeyValue) String() string {
@@ -129,14 +134,16 @@ func ToShellWithPrefix(prefix string, kvl []KeyValue) string {
 	return sb.String()
 }
 
-func SerializeValue(value interface{}) string {
+func SerializeValue(value interface{}) (string, error) {
 	switch v := value.(type) {
 	case bool:
 		res := "false"
 		if v {
 			res = "true"
 		}
-		return res
+		return res, nil
+	case []byte:
+		return ShellQuote(base64.StdEncoding.EncodeToString(v))
 	case string:
 		return ShellQuote(v)
 	default:
@@ -186,24 +193,33 @@ func structToEnvVars(envVars []KeyValue, allErrors []error, prefix string, s int
 		}
 		fieldValue := v.Field(i)
 		stringValue := ""
+		var err error
 		switch fieldValue.Kind() { //nolint: exhaustive // we have default: for the other cases
 		case reflect.Ptr:
 			if !fieldValue.IsNil() {
 				fieldValue = fieldValue.Elem()
-				stringValue = SerializeValue(fieldValue.Interface())
+				stringValue, err = SerializeValue(fieldValue.Interface())
 			}
 		case reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
-			// log.LogVf("Skipping field %s of type %v, not supported", fieldType.Name, fieldType.Type)
-			continue
+			// From that list of other types, only support []byte
+			if fieldValue.Type().Elem().Kind() == reflect.Uint8 {
+				stringValue, err = SerializeValue(fieldValue.Interface())
+			} else {
+				// log.LogVf("Skipping field %s of type %v, not supported", fieldType.Name, fieldType.Type)
+				continue
+			}
 		case reflect.Struct:
 			// Recurse with prefix
 			envVars, allErrors = structToEnvVars(envVars, allErrors, tag+"_", fieldValue.Interface())
 			continue
 		default:
 			value := fieldValue.Interface()
-			stringValue = SerializeValue(value)
+			stringValue, err = SerializeValue(value)
 		}
 		envVars = append(envVars, KeyValue{Key: prefix + tag, QuotedValue: stringValue})
+		if err != nil {
+			allErrors = append(allErrors, err)
+		}
 	}
 	return envVars, allErrors
 }
@@ -308,6 +324,14 @@ func setFromEnv(allErrors []error, prefix string, s interface{}) []error {
 			ev, err = strconv.ParseBool(envVal)
 			if err == nil {
 				fieldValue.SetBool(ev)
+			}
+		case reflect.Slice:
+			if fieldValue.Type().Elem().Kind() != reflect.Uint8 {
+				err = fmt.Errorf("unsupported slice of %v to set from %s=%q", fieldValue.Type().Elem().Kind(), envName, envVal)
+			} else {
+				var data []byte
+				data, err = base64.StdEncoding.DecodeString(envVal)
+				fieldValue.SetBytes(data)
 			}
 		default:
 			err = fmt.Errorf("unsupported type %v to set from %s=%q", kind, envName, envVal)

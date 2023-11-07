@@ -118,12 +118,13 @@ type FooConfig struct {
 	Embedded
 	HiddenEmbedded `env:"-"`
 	RecurseHere    Embedded
+	SomeBinary     []byte
 }
 
 func TestStructToEnvVars(t *testing.T) {
 	intV := 199
 	foo := FooConfig{
-		Foo:          "a\nfoo with $X, `backticks`, \" quotes and \\ and ' in middle and end '",
+		Foo:          "a newline:\nfoo with $X, `backticks`, \" quotes and \\ and ' in middle and end '",
 		Bar:          "42str",
 		Blah:         42,
 		ABool:        true,
@@ -135,6 +136,7 @@ func TestStructToEnvVars(t *testing.T) {
 			InnerA: "rec a",
 			InnerB: "rec b",
 		},
+		SomeBinary: []byte{0, 1, 2},
 	}
 	foo.InnerA = "inner a"
 	foo.InnerB = "inner b"
@@ -149,12 +151,12 @@ func TestStructToEnvVars(t *testing.T) {
 	if len(errors) != 0 {
 		t.Errorf("expected no error, got %v", errors)
 	}
-	if len(envVars) != 11 {
-		t.Errorf("expected 11 env vars, got %d: %+v", len(envVars), envVars)
+	if len(envVars) != 12 {
+		t.Errorf("expected 12 env vars, got %d: %+v", len(envVars), envVars)
 	}
 	str := ToShellWithPrefix("TST_", envVars)
 	//nolint:lll
-	expected := `TST_FOO='a
+	expected := `TST_FOO='a newline:
 foo with $X, ` + "`backticks`" + `, " quotes and \ and '\'' in middle and end '\'''
 TST_BAR='42str'
 TST_A_SPECIAL_BLAH='42'
@@ -166,10 +168,26 @@ TST_INNER_A='inner a'
 TST_INNER_B='inner b'
 TST_RECURSE_HERE_INNER_A='rec a'
 TST_RECURSE_HERE_INNER_B='rec b'
-export TST_FOO TST_BAR TST_A_SPECIAL_BLAH TST_A_BOOL TST_HTTP_SERVER TST_INT_POINTER TST_FLOAT_POINTER TST_INNER_A TST_INNER_B TST_RECURSE_HERE_INNER_A TST_RECURSE_HERE_INNER_B
+TST_SOME_BINARY='AAEC'
+export TST_FOO TST_BAR TST_A_SPECIAL_BLAH TST_A_BOOL TST_HTTP_SERVER TST_INT_POINTER TST_FLOAT_POINTER TST_INNER_A TST_INNER_B TST_RECURSE_HERE_INNER_A TST_RECURSE_HERE_INNER_B TST_SOME_BINARY
 `
 	if str != expected {
 		t.Errorf("\n---expected:---\n%s\n---got:---\n%s", expected, str)
+	}
+	// NUL in string
+	type Cfg struct {
+		Foo string
+	}
+	cfg := Cfg{Foo: "ABC\x00DEF"}
+	envVars, errors = StructToEnvVars(&cfg)
+	if len(errors) != 1 {
+		t.Errorf("Should have had error with embedded NUL")
+	}
+	if envVars[0].Key != "FOO" {
+		t.Errorf("Expecting key to be present %v", envVars)
+	}
+	if envVars[0].QuotedValue != "" {
+		t.Errorf("Expecting value to be empty %v", envVars)
 	}
 }
 
@@ -186,6 +204,7 @@ func TestSetFromEnv(t *testing.T) {
 		{"TST2_A_BOOL", "1"},
 		{"TST2_FLOAT_POINTER", "5.75"},
 		{"TST2_INT_POINTER", "73"},
+		{"TST2_SOME_BINARY", "QUJDAERFRg=="},
 	}
 	for _, e := range envs {
 		os.Setenv(e.k, e.v)
@@ -198,5 +217,8 @@ func TestSetFromEnv(t *testing.T) {
 		foo.FloatPointer == nil || *foo.FloatPointer != 5.75 ||
 		foo.IntPointer == nil || *foo.IntPointer != 73 {
 		t.Errorf("Mismatch in object values, got: %+v", foo)
+	}
+	if string(foo.SomeBinary) != "ABC\x00DEF" {
+		t.Errorf("Base64 decoding not working for []byte field: %q", string(foo.SomeBinary))
 	}
 }
