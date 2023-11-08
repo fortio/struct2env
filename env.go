@@ -90,7 +90,7 @@ func CamelCaseToLowerKebabCase(s string) string {
 
 // Intermediate result list from StructToEnvVars(), both the Key and QuotedValue
 // must be shell safe/non adversarial as they are emitted as is by String() with = in between.
-// Using StructToEnvVars produces safe values even with adversarial input (length and future 
+// Using StructToEnvVars produces safe values even with adversarial input (length and future
 // reoccurence of bugs like https://en.wikipedia.org/wiki/Shellshock_(software_bug) notwithstanding)
 // So avoid or scrub external values if possible (or use []byte type which base64 encodes the values).
 type KeyValue struct {
