@@ -94,8 +94,9 @@ func CamelCaseToLowerKebabCase(s string) string {
 // reoccurence of bugs like https://en.wikipedia.org/wiki/Shellshock_(software_bug) notwithstanding)
 // So avoid or scrub external values if possible (or use []byte type which base64 encodes the values).
 type KeyValue struct {
-	Key         string // Must be safe (is when coming from Go struct names but could be bad with env:).
-	QuotedValue string // (Must be) Already quoted/escaped.
+	Key            string // Must be safe (is when coming from Go struct names but could be bad with env:).
+	ShellQuotedVal string // (Must be) Already quoted/escaped ('' style).
+	YamlQuotedVal  string // (Must be) Already quoted/escaped for yaml ("" with \ style).
 }
 
 // Escape characters such as the result string can be embedded as a single argument in a shell fragment
@@ -111,8 +112,16 @@ func ShellQuote(input string) (string, error) {
 	return "'" + strings.ReplaceAll(input, "'", `'\''`) + "'", nil
 }
 
-func (kv KeyValue) String() string {
-	return fmt.Sprintf("%s=%s", kv.Key, kv.QuotedValue)
+func YamlQuote(input string) string {
+	return strconv.Quote(input)
+}
+
+func (kv KeyValue) ToShell() string {
+	return fmt.Sprintf("%s=%s", kv.Key, kv.ShellQuotedVal)
+}
+
+func (kv KeyValue) ToYaml() string {
+	return fmt.Sprintf("%s: %s", kv.Key, kv.YamlQuotedVal)
 }
 
 func ToShell(kvl []KeyValue) string {
@@ -125,7 +134,7 @@ func ToShellWithPrefix(prefix string, kvl []KeyValue) string {
 	keys := make([]string, 0, len(kvl))
 	for _, kv := range kvl {
 		sb.WriteString(prefix)
-		sb.WriteString(kv.String())
+		sb.WriteString(kv.ToShell())
 		sb.WriteRune('\n')
 		keys = append(keys, prefix+kv.Key)
 	}
@@ -135,22 +144,45 @@ func ToShellWithPrefix(prefix string, kvl []KeyValue) string {
 	return sb.String()
 }
 
-func SerializeValue(value interface{}) (string, error) {
+func ToYamlWithPrefix(prefix string, kvl []KeyValue) string {
+	var sb strings.Builder
+	for _, kv := range kvl {
+		sb.WriteString(prefix)
+		sb.WriteString(kv.ToYaml())
+		sb.WriteRune('\n')
+	}
+	return sb.String()
+}
+
+func SerializeValue(result *KeyValue, value interface{}) error {
+	var err error
 	switch v := value.(type) {
 	case bool:
 		res := "false"
 		if v {
 			res = "true"
 		}
-		return res, nil
+		result.ShellQuotedVal = res
+		result.YamlQuotedVal = res
+		return nil
 	case []byte:
-		return ShellQuote(base64.StdEncoding.EncodeToString(v))
+		result.ShellQuotedVal, err = ShellQuote(base64.StdEncoding.EncodeToString(v))
+		result.YamlQuotedVal = result.ShellQuotedVal // same single quoting works for yaml when no special chars is in
+		return err
 	case string:
-		return ShellQuote(v)
+		result.ShellQuotedVal, err = ShellQuote(v)
+		result.YamlQuotedVal = YamlQuote(v)
+		return err
 	case time.Duration:
-		return fmt.Sprintf("%g", v.Seconds()), nil
+		str := fmt.Sprintf("%g", v.Seconds())
+		result.ShellQuotedVal = str
+		result.YamlQuotedVal = str
+		return nil
 	default:
-		return ShellQuote(fmt.Sprint(value))
+		str := fmt.Sprint(value)
+		result.ShellQuotedVal, err = ShellQuote(str)
+		result.YamlQuotedVal = YamlQuote(str)
+		return err
 	}
 }
 
@@ -196,30 +228,32 @@ func structToEnvVars(envVars []KeyValue, allErrors []error, prefix string, s int
 			tag = CamelCaseToUpperSnakeCase(fieldType.Name)
 		}
 		fieldValue := v.Field(i)
-		stringValue := ""
 		var err error
+		res := KeyValue{Key: prefix + tag}
 
 		if fieldValue.Type() == reflect.TypeOf(time.Time{}) { // other wise we hit the "struct" case below
 			timeField := fieldValue.Interface().(time.Time)
-			stringValue, err = SerializeValue(timeField.Format(time.RFC3339))
+			err = SerializeValue(&res, timeField.Format(time.RFC3339))
 			if err != nil {
 				allErrors = append(allErrors, err)
 			} else {
-				envVars = append(envVars, KeyValue{Key: prefix + tag, QuotedValue: stringValue})
+				envVars = append(envVars, res)
 			}
 			continue // Continue to the next field
 		}
 
 		switch fieldValue.Kind() { //nolint: exhaustive // we have default: for the other cases
 		case reflect.Ptr:
-			if !fieldValue.IsNil() {
+			if fieldValue.IsNil() {
+				res.YamlQuotedVal = "null"
+			} else {
 				fieldValue = fieldValue.Elem()
-				stringValue, err = SerializeValue(fieldValue.Interface())
+				err = SerializeValue(&res, fieldValue.Interface())
 			}
 		case reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
 			// From that list of other types, only support []byte
 			if fieldValue.Type().Elem().Kind() == reflect.Uint8 {
-				stringValue, err = SerializeValue(fieldValue.Interface())
+				err = SerializeValue(&res, fieldValue.Interface())
 			} else {
 				// log.LogVf("Skipping field %s of type %v, not supported", fieldType.Name, fieldType.Type)
 				continue
@@ -233,10 +267,10 @@ func structToEnvVars(envVars []KeyValue, allErrors []error, prefix string, s int
 				err = fmt.Errorf("can't interface %s", fieldType.Name)
 			} else {
 				value := fieldValue.Interface()
-				stringValue, err = SerializeValue(value)
+				err = SerializeValue(&res, value)
 			}
 		}
-		envVars = append(envVars, KeyValue{Key: prefix + tag, QuotedValue: stringValue})
+		envVars = append(envVars, res)
 		if err != nil {
 			allErrors = append(allErrors, err)
 		}

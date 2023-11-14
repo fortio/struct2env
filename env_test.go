@@ -180,6 +180,26 @@ export TST_FOO TST_BAR TST_A_SPECIAL_BLAH TST_A_BOOL TST_HTTP_SERVER TST_INT_POI
 	if str != expected {
 		t.Errorf("\n---expected:---\n%s\n---got:---\n%s", expected, str)
 	}
+	// YAML check
+	str = ToYamlWithPrefix("Y_", envVars)
+	expected = `Y_FOO: "a newline:\nfoo with $X, ` + "`backticks`" + `, \" quotes and \\ and ' in middle and end '"
+Y_BAR: "42str"
+Y_A_SPECIAL_BLAH: "42"
+Y_A_BOOL: true
+Y_HTTP_SERVER: "http://localhost:8080"
+Y_INT_POINTER: "199"
+Y_FLOAT_POINTER: null
+Y_INNER_A: "inner a"
+Y_INNER_B: "inner b"
+Y_RECURSE_HERE_INNER_A: "rec a"
+Y_RECURSE_HERE_INNER_B: "rec b"
+Y_SOME_BINARY: 'AAEC'
+Y_DUR: 3600.1
+Y_TS: "1998-11-05T14:30:00Z"
+`
+	if str != expected {
+		t.Errorf("\n---expected:---\n%s\n---got:---\n%s", expected, str)
+	}
 	// NUL in string
 	type Cfg struct {
 		Foo string
@@ -192,9 +212,10 @@ export TST_FOO TST_BAR TST_A_SPECIAL_BLAH TST_A_BOOL TST_HTTP_SERVER TST_INT_POI
 	if envVars[0].Key != "FOO" {
 		t.Errorf("Expecting key to be present %v", envVars)
 	}
-	if envVars[0].QuotedValue != "" {
+	if envVars[0].ShellQuotedVal != "" {
 		t.Errorf("Expecting value to be empty %v", envVars)
 	}
+
 }
 
 func TestSetFromEnv(t *testing.T) {
