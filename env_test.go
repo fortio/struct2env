@@ -229,7 +229,6 @@ export TST_FOO TST_BAR TST_A_SPECIAL_BLAH TST_A_BOOL TST_HTTP_SERVER TST_INT_POI
 	if envVars[0].ShellQuotedVal != "" {
 		t.Errorf("Expecting value to be empty %v", envVars)
 	}
-
 }
 
 func TestSetFromEnv(t *testing.T) {

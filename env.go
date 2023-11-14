@@ -104,7 +104,7 @@ type KeyValue struct {
 // in the input (use []byte for that and it'll get base64 encoded/decoded).
 func ShellQuote(input string) (string, error) {
 	if strings.ContainsRune(input, 0) {
-		return "", fmt.Errorf("String value %q should not contain NUL", input)
+		return "", fmt.Errorf("string value %q should not contain NUL", input)
 	}
 	// To emit a single quote in a single quote enclosed string you have to close the current ' then emit a quote (\'),
 	// then reopen the single quote sequence to finish. Note that when the string ends with a quote there is an unnecessary
