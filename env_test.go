@@ -180,6 +180,40 @@ export TST_FOO TST_BAR TST_A_SPECIAL_BLAH TST_A_BOOL TST_HTTP_SERVER TST_INT_POI
 	if str != expected {
 		t.Errorf("\n---expected:---\n%s\n---got:---\n%s", expected, str)
 	}
+	// YAML check
+	str = ToYamlWithPrefix(2, "Y_", envVars)
+	expected = `  - name: Y_FOO
+    value: "a newline:\nfoo with $X, ` + "`backticks`" + `, \" quotes and \\ and ' in middle and end '"
+  - name: Y_BAR
+    value: "42str"
+  - name: Y_A_SPECIAL_BLAH
+    value: "42"
+  - name: Y_A_BOOL
+    value: true
+  - name: Y_HTTP_SERVER
+    value: "http://localhost:8080"
+  - name: Y_INT_POINTER
+    value: "199"
+  - name: Y_FLOAT_POINTER
+    value: null
+  - name: Y_INNER_A
+    value: "inner a"
+  - name: Y_INNER_B
+    value: "inner b"
+  - name: Y_RECURSE_HERE_INNER_A
+    value: "rec a"
+  - name: Y_RECURSE_HERE_INNER_B
+    value: "rec b"
+  - name: Y_SOME_BINARY
+    value: 'AAEC'
+  - name: Y_DUR
+    value: 3600.1
+  - name: Y_TS
+    value: "1998-11-05T14:30:00Z"
+`
+	if str != expected {
+		t.Errorf("\n---expected:---\n%s\n---got:---\n%s", expected, str)
+	}
 	// NUL in string
 	type Cfg struct {
 		Foo string
@@ -192,7 +226,7 @@ export TST_FOO TST_BAR TST_A_SPECIAL_BLAH TST_A_BOOL TST_HTTP_SERVER TST_INT_POI
 	if envVars[0].Key != "FOO" {
 		t.Errorf("Expecting key to be present %v", envVars)
 	}
-	if envVars[0].QuotedValue != "" {
+	if envVars[0].ShellQuotedVal != "" {
 		t.Errorf("Expecting value to be empty %v", envVars)
 	}
 }
