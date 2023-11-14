@@ -120,10 +120,6 @@ func (kv KeyValue) ToShell() string {
 	return fmt.Sprintf("%s=%s", kv.Key, kv.ShellQuotedVal)
 }
 
-func (kv KeyValue) ToYaml() string {
-	return fmt.Sprintf("%s: %s", kv.Key, kv.YamlQuotedVal)
-}
-
 func ToShell(kvl []KeyValue) string {
 	return ToShellWithPrefix("", kvl)
 }
@@ -144,11 +140,17 @@ func ToShellWithPrefix(prefix string, kvl []KeyValue) string {
 	return sb.String()
 }
 
-func ToYamlWithPrefix(prefix string, kvl []KeyValue) string {
+func ToYamlWithPrefix(indent int, prefix string, kvl []KeyValue) string {
 	var sb strings.Builder
 	for _, kv := range kvl {
+		sb.WriteString(strings.Repeat(" ", indent))
+		sb.WriteString("- name: ")
 		sb.WriteString(prefix)
-		sb.WriteString(kv.ToYaml())
+		sb.WriteString(kv.Key)
+		sb.WriteRune('\n')
+		sb.WriteString(strings.Repeat(" ", indent))
+		sb.WriteString("  value: ")
+		sb.WriteString(kv.YamlQuotedVal)
 		sb.WriteRune('\n')
 	}
 	return sb.String()
