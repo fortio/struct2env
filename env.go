@@ -121,11 +121,12 @@ func (kv KeyValue) ToShell() string {
 }
 
 func ToShell(kvl []KeyValue) string {
-	return ToShellWithPrefix("", kvl)
+	return ToShellWithPrefix("", kvl, false /*don't skip export last line*/)
 }
 
 // This convert the key value pairs to bourne shell syntax (vs newer bash export FOO=bar).
-func ToShellWithPrefix(prefix string, kvl []KeyValue) string {
+// If skipExport is true the last line export VAR1 VAR2... is omitted.
+func ToShellWithPrefix(prefix string, kvl []KeyValue, skipExport bool) string {
 	var sb strings.Builder
 	keys := make([]string, 0, len(kvl))
 	for _, kv := range kvl {
@@ -134,9 +135,11 @@ func ToShellWithPrefix(prefix string, kvl []KeyValue) string {
 		sb.WriteRune('\n')
 		keys = append(keys, prefix+kv.Key)
 	}
-	sb.WriteString("export ")
-	sb.WriteString(strings.Join(keys, " "))
-	sb.WriteRune('\n')
+	if !skipExport {
+		sb.WriteString("export ")
+		sb.WriteString(strings.Join(keys, " "))
+		sb.WriteRune('\n')
+	}
 	return sb.String()
 }
 
