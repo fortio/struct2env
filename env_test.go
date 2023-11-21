@@ -186,6 +186,12 @@ TST_TS='1998-11-05T14:30:00Z'
 	if str != expected {
 		t.Errorf("\n---expected:---\n%s\n---got:---\n%s", expected, str)
 	}
+	// Same no prefix
+	str = ToShell(envVars)
+	expected = strings.ReplaceAll(expected, "TST_", "")
+	if str != expected {
+		t.Errorf("\n---expected:---\n%s\n---got:---\n%s", expected, str)
+	}
 	// YAML check
 	str = ToYamlWithPrefix(2, "Y_", envVars)
 	expected = `  - name: Y_FOO
