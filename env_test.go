@@ -158,8 +158,7 @@ func TestStructToEnvVars(t *testing.T) {
 	if len(envVars) != 14 {
 		t.Errorf("expected 14 env vars, got %d: %+v", len(envVars), envVars)
 	}
-	str := ToShellWithPrefix("TST_", envVars)
-	//nolint:lll
+	str := ToShellWithPrefix("TST_", envVars, true)
 	expected := `TST_FOO='a newline:
 foo with $X, ` + "`backticks`" + `, " quotes and \ and '\'' in middle and end '\'''
 TST_BAR='42str'
@@ -175,8 +174,21 @@ TST_RECURSE_HERE_INNER_B='rec b'
 TST_SOME_BINARY='AAEC'
 TST_DUR=3600.1
 TST_TS='1998-11-05T14:30:00Z'
-export TST_FOO TST_BAR TST_A_SPECIAL_BLAH TST_A_BOOL TST_HTTP_SERVER TST_INT_POINTER TST_FLOAT_POINTER TST_INNER_A TST_INNER_B TST_RECURSE_HERE_INNER_A TST_RECURSE_HERE_INNER_B TST_SOME_BINARY TST_DUR TST_TS
 `
+	if str != expected {
+		t.Errorf("\n---expected:---\n%s\n---got:---\n%s", expected, str)
+	}
+	// Again with export:
+	//nolint:lll
+	expected += `export TST_FOO TST_BAR TST_A_SPECIAL_BLAH TST_A_BOOL TST_HTTP_SERVER TST_INT_POINTER TST_FLOAT_POINTER TST_INNER_A TST_INNER_B TST_RECURSE_HERE_INNER_A TST_RECURSE_HERE_INNER_B TST_SOME_BINARY TST_DUR TST_TS
+`
+	str = ToShellWithPrefix("TST_", envVars, false)
+	if str != expected {
+		t.Errorf("\n---expected:---\n%s\n---got:---\n%s", expected, str)
+	}
+	// Same no prefix
+	str = ToShell(envVars)
+	expected = strings.ReplaceAll(expected, "TST_", "")
 	if str != expected {
 		t.Errorf("\n---expected:---\n%s\n---got:---\n%s", expected, str)
 	}
