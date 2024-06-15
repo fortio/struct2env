@@ -65,7 +65,7 @@ func CamelCaseToUpperSnakeCase(s string) string {
 }
 
 // CamelCaseToLowerSnakeCase converts a string from camelCase or CamelCase
-// to lowe_snake_case. Handles cases like HTTPServer -> http_server.
+// to lower_snake_case. Handles cases like HTTPServer -> http_server.
 // Good for JSON tags for instance.
 func CamelCaseToLowerSnakeCase(s string) string {
 	if s == "" {
