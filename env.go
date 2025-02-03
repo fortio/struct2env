@@ -313,7 +313,7 @@ func SetFromEnv(prefix string, s interface{}) []error {
 	return SetFrom(os.LookupEnv, prefix, s)
 }
 
-// Reverse of StructToEnvVars, assumes the same encoding. Using passed it lookup object that can lookup values by keys.
+// Reverse of StructToEnvVars, assumes the same encoding. Using passed in lookup object that can lookup values by keys.
 func SetFrom(envLookup EnvLookup, prefix string, s interface{}) []error {
 	return setFromEnv(nil, envLookup, prefix, s)
 }
