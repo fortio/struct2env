@@ -1,4 +1,7 @@
 # struct2env
+[![Go Reference](https://pkg.go.dev/badge/fortio.org/struct2env.svg)](https://pkg.go.dev/fortio.org/struct2env)
+[![Go Report Card](https://goreportcard.com/badge/fortio.org/struct2env)](https://goreportcard.com/report/fortio.org/struct2env)
+[![GitHub Release](https://img.shields.io/github/release/fortio/struct2env.svg?style=flat)](https://github.com/fortio/struct2env/releases/)
 
 Convert between go structures to environment variables and back (for structured config &lt;-> shell env and to kubernetes YAML env pod spec)
 
