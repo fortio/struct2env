@@ -247,7 +247,7 @@ func structToEnvVars(envVars []KeyValue, allErrors []error, prefix string, s int
 			continue // Continue to the next field
 		}
 
-		switch fieldValue.Kind() { //nolint: exhaustive // we have default: for the other cases
+		switch fieldValue.Kind() {
 		case reflect.Ptr:
 			if fieldValue.IsNil() {
 				res.YamlQuotedVal = "null"
@@ -313,7 +313,7 @@ func SetFromEnv(prefix string, s interface{}) []error {
 	return SetFrom(os.LookupEnv, prefix, s)
 }
 
-// Reverse of StructToEnvVars, assumes the same encoding. Using passed it lookup object that can lookup values by keys.
+// Reverse of StructToEnvVars, assumes the same encoding. Using passed in lookup object that can lookup values by keys.
 func SetFrom(envLookup EnvLookup, prefix string, s interface{}) []error {
 	return setFromEnv(nil, envLookup, prefix, s)
 }
@@ -395,7 +395,7 @@ func setValue(
 	envName, envVal string,
 ) []error {
 	var err error
-	switch kind { //nolint: exhaustive // we have default: for the other cases
+	switch kind {
 	case reflect.String:
 		fieldValue.SetString(envVal)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
